@@ -17,13 +17,12 @@ create_user() {
     username="disala"
     password="root"
     Pin="123456"
-    
+
     useradd -m "$username"
     adduser "$username" sudo
     echo "$username:$password" | sudo chpasswd
     sed -i 's/\/bin\/sh/\/bin\/bash/g' /etc/passwd
 
-    # Add PATH update to .bashrc of the new user
     echo 'export PATH=$PATH:/home/user/.local/bin' >> /home/"$username"/.bashrc
     su - "$username" -c "source ~/.bashrc"
 
@@ -39,42 +38,41 @@ setup_storage() {
     mount --bind /storage /home/"$username"/storage
 }
 
-# Function to install and configure RDP
+# Function to install and configure RDP with KDE Plasma
 setup_rdp() {
-    echo "Google Chrome Installing"
+    echo "Installing Google Chrome"
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
     dpkg --install google-chrome-stable_current_amd64.deb
     apt install --assume-yes --fix-broken
-    
+
     echo "Installing Firefox ESR"
     add-apt-repository ppa:mozillateam/ppa -y  
     apt update
     apt install --assume-yes firefox-esr
-    apt install --assume-yes dbus-x11 dbus 
+    apt install --assume-yes dbus-x11 dbus
 
-    echo "Installing dependencies"
+    echo "Installing base dependencies"
     apt update
     add-apt-repository universe -y
     apt install --assume-yes xvfb xserver-xorg-video-dummy xbase-clients python3-packaging python3-psutil python3-xdg libgbm1 libutempter0 libfuse2 nload qbittorrent ffmpeg gpac fonts-lklug-sinhala
-    sudo apt update && sudo apt install -y tmate
+    apt install --assume-yes tmate
 
-    echo "Installing Desktop Environment"
+    echo "Installing KDE Plasma Desktop Environment"
     apt install --assume-yes kde-plasma-desktop plasma-workspace kde-standard konsole
     echo "exec /etc/X11/Xsession /usr/bin/startplasma-x11" > /etc/chrome-remote-desktop-session
     apt remove --assume-yes gnome-terminal
     apt install --assume-yes xscreensaver
-    systemctl disable lightdm.service
+    systemctl disable sddm.service
 
     echo "Installing Chrome Remote Desktop"
     wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
     dpkg --install chrome-remote-desktop_current_amd64.deb
     apt install --assume-yes --fix-broken
 
-    echo "Finalizing"
+    echo "Finalizing setup"
     adduser "$username" chrome-remote-desktop
-    curl -s -L -k -o xfce-shapes.svg https://raw.githubusercontent.com/The-Disa1a/Cloud-Shell-GCRD/refs/heads/main/Wall/xfce-shapes.svg
-    sudo mv xfce-shapes.svg /usr/share/backgrounds/xfce/
-    echo "Wallpaper Changed"
+
+    echo "Wallpaper skip (XFCE-specific skipped)"
     
     su - "$username" -c "$CRD --pin=$Pin"
     service chrome-remote-desktop start
