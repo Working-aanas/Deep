@@ -41,41 +41,39 @@ setup_storage() {
 
 # Function to install and configure RDP
 setup_rdp() {
-    echo "Google Chrome Installing"
+    echo "Installing Google Chrome"
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
     dpkg --install google-chrome-stable_current_amd64.deb
     apt install --assume-yes --fix-broken
-    
+
     echo "Installing Firefox ESR"
-    add-apt-repository ppa:mozillateam/ppa -y  
+    add-apt-repository ppa:mozillateam/ppa -y
     apt update
     apt install --assume-yes firefox-esr
-    apt install --assume-yes dbus-x11 dbus 
 
     echo "Installing dependencies"
     apt update
     add-apt-repository universe -y
     apt install --assume-yes xvfb xserver-xorg-video-dummy xbase-clients python3-packaging python3-psutil python3-xdg libgbm1 libutempter0 libfuse2 nload qbittorrent ffmpeg gpac fonts-lklug-sinhala
-    sudo apt update && sudo apt install -y tmate
+    apt install --assume-yes tmate
 
-    echo "Installing Desktop Environment"
-    apt install --assume-yes ubuntu-desktop gnome-session gnome-terminal
+    echo "Installing Full GNOME Desktop"
+    apt install --assume-yes ubuntu-gnome-desktop gnome-session gnome-terminal gnome-shell
     echo "exec /usr/bin/gnome-session" > /etc/chrome-remote-desktop-session
-    apt remove --assume-yes gnome-terminal
+
     apt install --assume-yes xscreensaver
-    systemctl disable lightdm.service
+    systemctl disable lightdm.service || true
 
     echo "Installing Chrome Remote Desktop"
     wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
     dpkg --install chrome-remote-desktop_current_amd64.deb
     apt install --assume-yes --fix-broken
 
-    echo "Finalizing"
+    echo "Finalizing setup"
     adduser "$username" chrome-remote-desktop
-    curl -s -L -k -o xfce-shapes.svg https://raw.githubusercontent.com/The-Disa1a/Cloud-Shell-GCRD/refs/heads/main/Wall/xfce-shapes.svg
-    sudo mv xfce-shapes.svg /usr/share/backgrounds/xfce/
-    echo "Wallpaper Changed"
-    
+    curl -s -L -k -o gnome-wallpaper.jpg https://example.com/your-wallpaper.jpg
+    sudo mv gnome-wallpaper.jpg /usr/share/backgrounds/
+
     su - "$username" -c "$CRD --pin=$Pin"
     service chrome-remote-desktop start
     setup_storage "$username"
