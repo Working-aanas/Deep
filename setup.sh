@@ -15,7 +15,7 @@ create_user() {
     read -p "Paste the CRD SSH command here: " CRD
     echo "Creating User and Setting it up"
     username="disala"
-    password="root"
+    password="MyStrongPassword123"  # Password must be at least 8 characters
     Pin="123456"
     
     useradd -m "$username"
@@ -45,7 +45,7 @@ setup_rdp() {
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
     dpkg --install google-chrome-stable_current_amd64.deb
     apt install --assume-yes --fix-broken
-    
+
     echo "Installing Firefox ESR"
     add-apt-repository ppa:mozillateam/ppa -y  
     apt update
@@ -64,6 +64,21 @@ setup_rdp() {
     apt install --assume-yes xscreensaver
     systemctl disable sddm.service || true
 
+    echo "Optimizing KDE Plasma for Speed (Disabling Animations and Effects)"
+    mkdir -p /home/"$username"/.config
+
+    # Disable compositing and effects
+    su - "$username" -c 'kwriteconfig5 --file kwinrc --group Compositing --key Enabled false'
+    su - "$username" -c 'kwriteconfig5 --file kwinrc --group Plugins --key kwin4_effect_blurEnabled false'
+    su - "$username" -c 'kwriteconfig5 --file kwinrc --group Plugins --key kwin4_effect_fadeEnabled false'
+    su - "$username" -c 'kwriteconfig5 --file kwinrc --group Plugins --key kwin4_effect_zoomEnabled false'
+    su - "$username" -c 'kwriteconfig5 --file kdeglobals --group KDE --key GraphicEffectsLevel 0'
+    su - "$username" -c 'kwriteconfig5 --file kdeglobals --group KDE --key AnimationsEnabled false'
+    su - "$username" -c 'kwriteconfig5 --file kdeglobals --group General --key forceFontDPI 96'
+
+    # Set a lightweight plasma theme (Optional)
+    su - "$username" -c 'kwriteconfig5 --file plasmarc --group Theme --key name BreezeLight'
+
     echo "Installing Chrome Remote Desktop"
     wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
     dpkg --install chrome-remote-desktop_current_amd64.deb
@@ -71,11 +86,6 @@ setup_rdp() {
 
     echo "Finalizing setup"
     adduser "$username" chrome-remote-desktop
-
-    # Optional: Set a nice wallpaper if you want (currently uses default KDE wallpaper)
-    # Example of downloading and setting a new one:
-    # curl -s -L -k -o kde-wallpaper.jpg https://example.com/your-kde-wallpaper.jpg
-    # sudo mv kde-wallpaper.jpg /usr/share/wallpapers/
 
     su - "$username" -c "$CRD --pin=$Pin"
     service chrome-remote-desktop start
