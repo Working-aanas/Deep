@@ -45,11 +45,12 @@ setup_rdp() {
     wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
     dpkg --install google-chrome-stable_current_amd64.deb
     apt install --assume-yes --fix-broken
-
+    
     echo "Installing Firefox ESR"
-    add-apt-repository ppa:mozillateam/ppa -y
+    add-apt-repository ppa:mozillateam/ppa -y  
     apt update
     apt install --assume-yes firefox-esr
+    apt install --assume-yes dbus-x11 dbus 
 
     echo "Installing dependencies"
     apt update
@@ -57,12 +58,11 @@ setup_rdp() {
     apt install --assume-yes xvfb xserver-xorg-video-dummy xbase-clients python3-packaging python3-psutil python3-xdg libgbm1 libutempter0 libfuse2 nload qbittorrent ffmpeg gpac fonts-lklug-sinhala
     apt install --assume-yes tmate
 
-    echo "Installing Full GNOME Desktop"
-    apt install --assume-yes ubuntu-gnome-desktop gnome-session gnome-terminal gnome-shell
-    echo "exec /usr/bin/gnome-session" > /etc/chrome-remote-desktop-session
-
+    echo "Installing KDE Plasma Desktop Environment"
+    apt install --assume-yes kde-plasma-desktop sddm
+    echo "exec startplasma-x11" > /etc/chrome-remote-desktop-session
     apt install --assume-yes xscreensaver
-    systemctl disable lightdm.service || true
+    systemctl disable sddm.service || true
 
     echo "Installing Chrome Remote Desktop"
     wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
@@ -71,8 +71,11 @@ setup_rdp() {
 
     echo "Finalizing setup"
     adduser "$username" chrome-remote-desktop
-    curl -s -L -k -o gnome-wallpaper.jpg https://example.com/your-wallpaper.jpg
-    sudo mv gnome-wallpaper.jpg /usr/share/backgrounds/
+
+    # Optional: Set a nice wallpaper if you want (currently uses default KDE wallpaper)
+    # Example of downloading and setting a new one:
+    # curl -s -L -k -o kde-wallpaper.jpg https://example.com/your-kde-wallpaper.jpg
+    # sudo mv kde-wallpaper.jpg /usr/share/wallpapers/
 
     su - "$username" -c "$CRD --pin=$Pin"
     service chrome-remote-desktop start
