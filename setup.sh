@@ -59,8 +59,8 @@ setup_rdp() {
     sudo apt update && sudo apt install -y tmate
 
     echo "Installing Desktop Environment"
-    apt install --assume-yes xfce4 desktop-base xfce4-terminal xfce4-session
-    echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session
+    apt install --assume-yes ubuntu-desktop gnome-session gnome-terminal
+    echo "exec /usr/bin/gnome-session" > /etc/chrome-remote-desktop-session
     apt remove --assume-yes gnome-terminal
     apt install --assume-yes xscreensaver
     systemctl disable lightdm.service
