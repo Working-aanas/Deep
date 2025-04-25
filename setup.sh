@@ -15,7 +15,7 @@ create_user() {
     read -p "Paste the CRD SSH command here: " CRD
     echo "Creating user and setting it up..."
 
-    username="disala"
+    username="eldas"
     password="root"
     Pin="123456"
 
