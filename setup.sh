@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Set DEBIAN_FRONTEND to noninteractive to suppress prompts
-export DEBIAN_FRONTEND=noninteractive
+# Set DNF to assume yes
+export DNF_YUM_AUTO_YES=1
 
 # Check if the script is run as root
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
+   echo "This script must be run as root"
    exit 1
 fi
 
@@ -19,9 +19,8 @@ create_user() {
     Pin="123456"
 
     useradd -m "$username"
-    adduser "$username" sudo
-    echo "$username:$password" | sudo chpasswd
-    sed -i 's/\/bin\/sh/\/bin\/bash/g' /etc/passwd
+    echo "$username:$password" | passwd --stdin "$username"
+    usermod -aG wheel "$username"
 
     echo 'export PATH=$PATH:/home/user/.local/bin' >> /home/"$username"/.bashrc
     su - "$username" -c "source ~/.bashrc"
@@ -38,45 +37,38 @@ setup_storage() {
     mount --bind /storage /home/"$username"/storage
 }
 
-# Function to install and configure RDP with KDE Plasma
+# Function to install and configure RDP
 setup_rdp() {
     echo "Installing Google Chrome"
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-    dpkg --install google-chrome-stable_current_amd64.deb
-    apt install --assume-yes --fix-broken
+    dnf install -y fedora-workstation-repositories
+    dnf config-manager --set-enabled google-chrome
+    dnf install -y google-chrome-stable
 
-    echo "Installing Firefox ESR"
-    add-apt-repository ppa:mozillateam/ppa -y  
-    apt update
-    apt install --assume-yes firefox-esr
-    apt install --assume-yes dbus-x11 dbus
+    echo "Installing Firefox ESR (if not already)"
+    dnf install -y firefox
 
-    echo "Installing base dependencies"
-    apt update
-    add-apt-repository universe -y
-    apt install --assume-yes xvfb xserver-xorg-video-dummy xbase-clients python3-packaging python3-psutil python3-xdg libgbm1 libutempter0 libfuse2 nload qbittorrent ffmpeg gpac fonts-lklug-sinhala
-    apt install --assume-yes tmate
-
-    echo "Installing KDE Plasma Desktop Environment"
-    apt install --assume-yes kde-plasma-desktop plasma-workspace kde-standard konsole
-    echo "exec /etc/X11/Xsession /usr/bin/startplasma-x11" > /etc/chrome-remote-desktop-session
-    apt remove --assume-yes gnome-terminal
-    apt install --assume-yes xscreensaver
-    systemctl disable sddm.service
+    echo "Installing dependencies"
+    dnf install -y dbus-x11 dbus python3-packaging python3-psutil python3-xdg xorg-x11-server-Xvfb xorg-x11-drv-dummy xorg-x11-xauth nload qbittorrent ffmpeg gpac fuse-libs tmate
 
     echo "Installing Chrome Remote Desktop"
-    wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
-    dpkg --install chrome-remote-desktop_current_amd64.deb
-    apt install --assume-yes --fix-broken
+    wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_x86_64.rpm
+    dnf install -y ./chrome-remote-desktop_current_x86_64.rpm
 
-    echo "Finalizing setup"
-    adduser "$username" chrome-remote-desktop
+    echo "Setting up Desktop Environment for CRD"
+    echo "exec /usr/bin/gnome-session" > /etc/chrome-remote-desktop-session
 
-    echo "Wallpaper skip (XFCE-specific skipped)"
-    
+    systemctl disable gdm.service
+
+    echo "Adding user to chrome-remote-desktop group"
+    usermod -aG chrome-remote-desktop "$username"
+
+    echo "Wallpaper and customization (Optional)"
+    # You can set a wallpaper here if needed. Nobara uses GNOME/KDE, not XFCE.
+    # Example for GNOME:
+    # sudo -u "$username" gsettings set org.gnome.desktop.background picture-uri 'file:///usr/share/backgrounds/YourBackground.jpg'
+
     su - "$username" -c "$CRD --pin=$Pin"
-    service chrome-remote-desktop start
-    setup_storage "$username"
+    systemctl enable chrome-remote-desktop@$username
 
     echo "RDP setup completed"
 }
@@ -89,5 +81,5 @@ setup_rdp
 echo "Starting keep-alive loop. Press Ctrl+C to stop."
 while true; do
     echo "I'm alive"
-    sleep 300  # Sleep for 5 minutes
+    sleep 300
 done
