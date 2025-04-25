@@ -5,7 +5,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 # Check if the script is run as root
 if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
+   echo "This script must be run as root"
    exit 1
 fi
 
@@ -23,14 +23,13 @@ create_user() {
     echo "$username:$password" | sudo chpasswd
     sed -i 's/\/bin\/sh/\/bin\/bash/g' /etc/passwd
 
-    # Add PATH update to .bashrc of the new user
     echo 'export PATH=$PATH:/home/user/.local/bin' >> /home/"$username"/.bashrc
     su - "$username" -c "source ~/.bashrc"
 
     echo "User '$username' created and configured."
 }
 
-# Extra storage setup
+# Setup storage
 setup_storage() {
     mkdir -p /storage
     chmod 777 /storage
@@ -39,57 +38,63 @@ setup_storage() {
     mount --bind /storage /home/"$username"/storage
 }
 
-# Function to install and configure RDP
-setup_rdp() {
-    echo "Google Chrome Installing"
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-    dpkg --install google-chrome-stable_current_amd64.deb
-    apt install --assume-yes --fix-broken
-    
-    echo "Installing Firefox ESR"
-    add-apt-repository ppa:mozillateam/ppa -y  
+# Install Windows 10 VM
+setup_windows_vm() {
+    echo "Installing virtualization packages"
     apt update
-    apt install --assume-yes firefox-esr
-    apt install --assume-yes dbus-x11 dbus 
+    apt install --assume-yes qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
 
-    echo "Installing dependencies"
-    apt update
-    add-apt-repository universe -y
-    apt install --assume-yes xvfb xserver-xorg-video-dummy xbase-clients python3-packaging python3-psutil python3-xdg libgbm1 libutempter0 libfuse2 nload qbittorrent ffmpeg gpac fonts-lklug-sinhala
-    sudo apt update && sudo apt install -y tmate
+    echo "Creating Windows 10 virtual machine"
+    mkdir -p /var/lib/libvirt/images/windows10
+    cd /var/lib/libvirt/images/windows10
 
-    echo "Installing Desktop Environment"
-    apt install --assume-yes xfce4 desktop-base xfce4-terminal xfce4-session
-    echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session
-    apt remove --assume-yes gnome-terminal
-    apt install --assume-yes xscreensaver
-    systemctl disable lightdm.service
+    echo "Downloading Windows 10 ISO (Evaluation version)"
+    wget -O win10.iso "https://software-download.microsoft.com/db/Win10_22H2_English_x64.iso"
 
+    echo "Creating virtual hard disk"
+    qemu-img create -f qcow2 win10.img 60G
+
+    echo "Starting Windows 10 installation in background"
+
+    virt-install \
+        --name windows10 \
+        --memory 4096 \
+        --vcpus 2 \
+        --disk path=/var/lib/libvirt/images/windows10/win10.img,format=qcow2 \
+        --cdrom /var/lib/libvirt/images/windows10/win10.iso \
+        --os-type windows \
+        --os-variant win10 \
+        --network network=default \
+        --graphics vnc,listen=0.0.0.0 \
+        --noautoconsole \
+        --boot cdrom,hd
+
+    echo "Windows 10 VM is now installing. Connect via VNC Viewer to the server IP."
+}
+
+# Install Chrome Remote Desktop
+setup_crd() {
     echo "Installing Chrome Remote Desktop"
     wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
     dpkg --install chrome-remote-desktop_current_amd64.deb
     apt install --assume-yes --fix-broken
 
-    echo "Finalizing"
+    echo "Finalizing CRD setup"
     adduser "$username" chrome-remote-desktop
-    curl -s -L -k -o xfce-shapes.svg https://raw.githubusercontent.com/The-Disa1a/Cloud-Shell-GCRD/refs/heads/main/Wall/xfce-shapes.svg
-    sudo mv xfce-shapes.svg /usr/share/backgrounds/xfce/
-    echo "Wallpaper Changed"
-    
+
     su - "$username" -c "$CRD --pin=$Pin"
     service chrome-remote-desktop start
-    setup_storage "$username"
-
-    echo "RDP setup completed"
 }
 
 # Execute functions
 create_user
-setup_rdp
+setup_windows_vm
+setup_crd
+setup_storage
 
 # Keep-alive loop
 echo "Starting keep-alive loop. Press Ctrl+C to stop."
 while true; do
     echo "I'm alive"
-    sleep 300  # Sleep for 5 minutes
+    sleep 300
 done
