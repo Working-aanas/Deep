@@ -53,15 +53,24 @@ chmod +x /etc/chrome-remote-desktop-session
 # A fixed virtual screen avoids CRD resolution switches → less bandwidth
 echo "CHROME_REMOTE_DESKTOP_DEFAULT_DESKTOP_SIZES=1920x1080" >>/etc/environment
 
+###############################################################################
+# 6/6  Register the host and start it manually (no systemd inside Colab!)
+###############################################################################
 echo "👉 6/6  Ask Google for the one-time auth string"
-echo "   ▸ Visit https://remotedesktop.google.com/headless"
-echo "   ▸ Choose **Debian Linux** → copy the command beginning with 'DISPLAY=…'"
-read -rp $'Paste that whole line here: \n> ' CRD_REGISTER
+echo "   ▸ In your browser:  https://remotedesktop.google.com/headless"
+echo "   ▸ Choose **Debian Linux** and copy the command that begins with 'DISPLAY='"
+read -rp $'Paste that whole line here:\n> ' CRD_REGISTER
 
-# Run it just once under the new user
+# Register + launch the host exactly once, under the desktop user
 su - "$NEW_USER" -c "${CRD_REGISTER} --pin=${CRD_PIN}"
 
-systemctl enable chrome-remote-desktop@$NEW_USER --now
+# ── Keep the CRD daemon (and the notebook) alive ────────────────────────────
+/opt/google/chrome-remote-desktop/chrome-remote-desktop --start \
+        --user="$NEW_USER" \
+        --foreground &           # <-- runs in the background, but ties to this shell
 
-echo -e "\n✅  Done.  Connect from remotedesktop.google.com in 15-30 seconds."
-echo "ℹ︎  Username: $NEW_USER   Initial password: $NEW_PASS"
+# “I’m alive” heartbeat so Colab sees activity every 5 min
+while true; do
+    echo "[CRD-LXQt] $(date --iso-8601=seconds) – up and healthy"
+    sleep 300
+done
