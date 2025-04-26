@@ -1,135 +1,67 @@
-#!/bin/bash
+#!/usr/bin/env bash
+###############################################################################
+#  ultra-light Chrome Remote Desktop for Google Colab (Tesla T4, April 2025)
+#  - zero interactive prompts
+#  - ≥ Debian 11 / Ubuntu 20.04 container
+###############################################################################
+set -euo pipefail
+IFS=$'\n\t'
 
-# Set DEBIAN_FRONTEND to noninteractive to suppress prompts
-export DEBIAN_FRONTEND=noninteractive
+#### ─── EDITABLE VARIABLES ────────────────────────────────────────────────
+CRD_PIN="123456"            # 6-digit PIN Google asks for on first connect
+NEW_USER="colab"            # your desktop username  (≠ root)
+NEW_PASS="colab"            # initial password      (change later!)
+############################################################################
 
-# Check if the script is run as root
-if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
-   exit 1
-fi
+[[ $EUID -eq 0 ]] || { echo "❌ Run as root (prepend: sudo)"; exit 1; }
 
-# Function to create user
-create_user() {
-    echo "Please visit http://remotedesktop.google.com/headless and copy the command after Authentication"
-    read -p "Paste the CRD SSH command here: " CRD
-    echo "Creating User and Setting it up"
-    username="disala"
-    password="root"
-    Pin="123456"
+echo "👉 1/6  System prerequisites"
+apt-get update -qq
+apt-get install -y --no-install-recommends \
+        gnupg curl ca-certificates software-properties-common dbus-x11 x11-utils
 
-    useradd -m "$username"
-    adduser "$username" sudo
-    echo "$username:$password" | sudo chpasswd
-    sed -i 's/\/bin\/sh/\/bin\/bash/g' /etc/passwd
-
-    # Fix PATH
-    echo 'export PATH=$PATH:$HOME/.local/bin' >> /home/"$username"/.bashrc
-    su - "$username" -c "source ~/.bashrc"
-
-    echo "User '$username' created and configured."
-}
-
-# Extra storage setup
-setup_storage() {
-    mkdir -p /storage
-    chmod 777 /storage
-    chown "$username":"$username" /storage
-    mkdir -p /home/"$username"/storage
-    mount --bind /storage /home/"$username"/storage
-}
-
-# Function to install and configure RDP
-setup_rdp() {
-    echo "Installing Google Chrome"
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-    dpkg --install google-chrome-stable_current_amd64.deb || apt install --assume-yes --fix-broken
-
-    echo "Installing Firefox ESR"
-    add-apt-repository ppa:mozillateam/ppa -y  
-    apt update
-    apt install --assume-yes firefox-esr dbus-x11 dbus 
-
-    echo "Installing dependencies"
-    apt update
-    add-apt-repository universe -y
-    apt install --assume-yes \
-      xvfb xserver-xorg-video-dummy xbase-clients \
-      python3-packaging python3-psutil python3-xdg \
-      libgbm1 libutempter0 libfuse2 \
-      nload qbittorrent ffmpeg gpac \
-      fonts-lklug-sinhala tmate mesa-utils libgl1-mesa-dri libgl1-mesa-glx \
-      cpufrequtils pulseaudio lxqt xscreensaver
-
-    echo "Installing Chrome Remote Desktop"
-    wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
-    dpkg --install chrome-remote-desktop_current_amd64.deb || apt install --assume-yes --fix-broken
-
-    echo "Setting LXQt as Desktop Session"
-    echo "exec startlxqt" > /etc/chrome-remote-desktop-session
-
-    # CPU governor to Performance mode
-    cpufreq-set -g performance
-
-    # PulseAudio setup
-    systemctl --user start pulseaudio || pulseaudio --start
-
-    echo "Optimizing X11 settings for Dummy display"
-    cat > /etc/X11/xorg.conf <<EOF
-Section "Device"
-  Identifier "Configured Video Device"
-  Driver "dummy"
-EndSection
-
-Section "Monitor"
-  Identifier "Configured Monitor"
-  HorizSync 31.5-48.5
-  VertRefresh 50-70
-EndSection
-
-Section "Screen"
-  Identifier "Default Screen"
-  Monitor "Configured Monitor"
-  Device "Configured Video Device"
-  DefaultDepth 24
-  SubSection "Display"
-    Depth 24
-    Modes "1920x1080"
-  EndSubSection
-EndSection
+echo "👉 2/6  Google signing key + repos"
+curl -fsSL https://dl.google.com/linux/linux_signing_key.pub |
+        gpg --dearmor -o /usr/share/keyrings/google.gpg
+tee /etc/apt/sources.list.d/google.list >/dev/null <<EOF
+deb [arch=amd64 signed-by=/usr/share/keyrings/google.gpg] http://dl.google.com/linux/chrome/deb/ stable main
+deb [arch=amd64 signed-by=/usr/share/keyrings/google.gpg] https://dl.google.com/linux/chrome-remote-desktop/deb/ stable main
 EOF
 
-    echo "Tuning Chrome Remote Desktop for low latency"
-    echo "ENABLE_TUNING=true" >> /etc/chrome-remote-desktop-session.conf
+echo "👉 3/6  Install Chrome + CRD + LXQt (minimal)"
+apt-get update -qq
+apt-get install -y --no-install-recommends \
+        google-chrome-stable chrome-remote-desktop \
+        lxqt-core lxqt-config xserver-xorg-video-dummy openbox
 
-    echo "Disabling unnecessary services"
-    systemctl disable lightdm.service
-    systemctl disable bluetooth.service
-    systemctl disable avahi-daemon.service
-    systemctl disable cups.service
+# Optional: basic extras (remove if you want *absolute* minimum)
+apt-get install -y --no-install-recommends pcmanfm lxqt-panel lxqt-sudo nano
 
-    echo "Finalizing setup"
-    adduser "$username" chrome-remote-desktop
-    curl -s -L -k -o xfce-shapes.svg https://raw.githubusercontent.com/The-Disa1a/Cloud-Shell-GCRD/refs/heads/main/Wall/xfce-shapes.svg
-    mv xfce-shapes.svg /usr/share/backgrounds/xfce/
+echo "👉 4/6  Create non-root desktop user"
+id -u "$NEW_USER" &>/dev/null || useradd -m -s /bin/bash "$NEW_USER"
+echo "$NEW_USER:$NEW_PASS" | chpasswd
+adduser "$NEW_USER" sudo
+adduser "$NEW_USER" chrome-remote-desktop   # CRD must run under this group
 
-    echo "Wallpaper Changed"
+echo "👉 5/6  Wire LXQt into CRD"
+cat >/etc/chrome-remote-desktop-session <<'EOF'
+#!/bin/sh
+exec /usr/bin/startlxqt
+EOF
+chmod +x /etc/chrome-remote-desktop-session
 
-    su - "$username" -c "$CRD --pin=$Pin"
-    service chrome-remote-desktop start
+# A fixed virtual screen avoids CRD resolution switches → less bandwidth
+echo "CHROME_REMOTE_DESKTOP_DEFAULT_DESKTOP_SIZES=1920x1080" >>/etc/environment
 
-    setup_storage "$username"
+echo "👉 6/6  Ask Google for the one-time auth string"
+echo "   ▸ Visit https://remotedesktop.google.com/headless"
+echo "   ▸ Choose **Debian Linux** → copy the command beginning with 'DISPLAY=…'"
+read -rp $'Paste that whole line here: \n> ' CRD_REGISTER
 
-    echo "RDP setup completed!"
-}
+# Run it just once under the new user
+su - "$NEW_USER" -c "${CRD_REGISTER} --pin=${CRD_PIN}"
 
-# Execute functions
-create_user
-setup_rdp
+systemctl enable chrome-remote-desktop@$NEW_USER --now
 
-# Keep-alive loop
-echo "Starting keep-alive loop. Press Ctrl+C to stop."
-while true; do
-    echo "I'm alive"
-    sleep 300
-done
+echo -e "\n✅  Done.  Connect from remotedesktop.google.com in 15-30 seconds."
+echo "ℹ︎  Username: $NEW_USER   Initial password: $NEW_PASS"
